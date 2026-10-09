@@ -121,6 +121,21 @@ target_link_libraries(test_welcome PRIVATE mnet_static)
 target_include_directories(test_welcome PRIVATE include src test)
 add_test(NAME mnet_welcome_tests COMMAND test_welcome)
 
+add_executable(test_starvation test/test_starvation.c)
+target_link_libraries(test_starvation PRIVATE mnet_static)
+target_include_directories(test_starvation PRIVATE include src test)
+add_test(NAME mnet_starvation_tests COMMAND test_starvation)
+
+add_executable(test_reentrancy test/test_reentrancy.c)
+target_link_libraries(test_reentrancy PRIVATE mnet_static)
+target_include_directories(test_reentrancy PRIVATE include src test)
+add_test(NAME mnet_reentrancy_tests COMMAND test_reentrancy)
+
+add_executable(test_http_edge test/test_http_edge.c)
+target_link_libraries(test_http_edge PRIVATE mnet_static)
+target_include_directories(test_http_edge PRIVATE include src test)
+add_test(NAME mnet_http_edge_tests COMMAND test_http_edge)
+
 # Install
 install(TARGETS mnet_static mnet_shared
     ARCHIVE DESTINATION lib

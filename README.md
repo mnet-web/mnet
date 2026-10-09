@@ -168,7 +168,7 @@ mnet_set_workers(app, 4);
 /* Maximum concurrent connections. 0 = unlimited (default). */
 mnet_set_max_connections(app, 100);
 
-/* Keep-alive idle timeout in seconds. 0 = 30 s default. */
+/* Keep-alive idle timeout in seconds. 0 = 5 s default. */
 mnet_set_keep_alive_timeout(app, 30);
 
 /* Maximum request body size in bytes. 0 = 16 MB (default). */
@@ -345,7 +345,9 @@ The suite has eight parts:
   Content-Length/Transfer-Encoding handling, SIGPIPE survival, and Slowloris /
   idle / slow-body timeouts. The jsonf half runs everywhere; the server half is
   POSIX-only.
-- `test/test_client.c` (4 cases) covers the client-side HTTP API.
+- `test/test_client.c` (6 cases) covers the client-side HTTP API: invalid URLs,
+  a request with an explicit port and path (body returned with headers
+  stripped), 4xx responses returning NULL, and the async callback.
 - `test/test_welcome.c` (4 cases) covers the dev mode and welcome page.
 
 All suites run clean under Valgrind, AddressSanitizer and ThreadSanitizer, and
@@ -385,8 +387,10 @@ If you expose a server to a network you do not fully trust, read this section.
 sends nothing would otherwise hold its connection indefinitely. A 30 second
 timeout is applied by default. `mnet_set_timeout(app, seconds)` overrides it (use
 `0` to get the default back), and `mnet_set_keep_alive_timeout()` sets the
-separate idle timeout for reused keep-alive connections. Setting a negative
-timeout disables the protection and is strongly discouraged in production.
+separate idle timeout for reused keep-alive connections (5 seconds by default,
+because an idle keep-alive connection occupies a worker thread for the whole
+wait). Setting a negative timeout disables the protection and is strongly
+discouraged in production.
 
 **Choose a worker count deliberately.** The server is threaded by default (4
 workers), so multiple clients are served concurrently. Handlers then run on
@@ -401,14 +405,14 @@ connections with `503` once `n` are active. Without it there is no limit. Note
 that this is a simple counter, not per-IP rate limiting — it does not distinguish
 one abusive client from many legitimate ones.
 
-**HTTPS is not implemented.** The `mnet_set_https(app, 1)` flag only controls
-the HTTPS state reported on the welcome page; it does not add TLS. Terminate TLS
-in a reverse proxy (nginx, Caddy, stunnel) in front of mnet.
+**HTTPS is not implemented.** `mnet_set_https(app, 1)` is deprecated: it only
+controls the HTTPS state reported on the welcome page and adds no TLS at all.
+Terminate TLS in a reverse proxy (nginx, Caddy, stunnel) in front of mnet.
 
 **Enable development mode.** `mnet_set_dev_mode(app, 1)` enables a built-in
 welcome page. When no routes are registered and dev mode is on, mnet serves a
 welcome page at `/` and `/index.html` that shows the current development state
-(true/false), the current HTTPS state (https/http), and links to the GitHub
+(true/false), the reported HTTPS state (https/http, display only), and links to the GitHub
 README and to `docs/clib.md` for further setup.
 
 **Header size is bounded.** The request line and headers must fit in the 8 KB read
