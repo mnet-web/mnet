@@ -10,8 +10,26 @@ if cc.get_id() == 'msvc'
     add_project_arguments(['/W4', '/WX'], language: 'c')
     # Suppress false-positive C4996 deprecation warnings for standard C functions.
     add_project_arguments(['/D_CRT_SECURE_NO_WARNINGS', '/D_CRT_NONSTDC_NO_DEPRECATE'], language: 'c')
+    # MSVC's buffer-security hardening is on by default: /GS (stack cookies),
+    # /DYNAMICBASE (ASLR) and /NXCOMPAT (DEP) are all enabled unless explicitly
+    # turned off, so no extra flags are needed for parity with the POSIX side.
 else
     add_project_arguments(warning_flags, language: 'c')
+
+    # Hardening. -fstack-protector-strong works at any optimization level.
+    add_project_arguments('-fstack-protector-strong', language: 'c')
+
+    # _FORTIFY_SOURCE=2 only makes sense with optimization: without it glibc
+    # emits a #warning that -Werror would escalate. Meson's debug buildtype
+    # is -O0, so restrict it to optimized builds.
+    if get_option('optimization') != '0'
+        add_project_arguments('-D_FORTIFY_SOURCE=2', language: 'c')
+    endif
+
+    # relro/now are ELF-only.
+    if host_machine.system() == 'linux'
+        add_project_link_arguments('-Wl,-z,relro,-z,now', language: 'c')
+    endif
 endif
 
 # glibc's _FORTIFY_SOURCE is only meaningful with optimization, and some
@@ -45,9 +63,15 @@ endif
 mnet_sources = files(
     'src/mnet.c',
     'src/mnet_app.c',
+    'src/mnet_client.c',
+    'src/mnet_dispatch.c',
+    'src/mnet_handlers.c',
+    'src/mnet_log.c',
+    'src/mnet_parse.c',
     'src/mnet_response.c',
     'src/mnet_request.c',
     'src/mnet_router.c',
+    'src/mnet_server.c',
 )
 
 # Include directories
@@ -95,7 +119,7 @@ example_combined = executable('example_combined',
 test_mnet = executable('test_mnet',
     'test/test_mnet.c',
     link_with: mnet_static,
-    include_directories: [mnet_inc, include_directories('src'), include_directories('test')],
+    include_directories: [mnet_inc, mnet_priv_inc, include_directories('src'), include_directories('test')],
 )
 
 test('mnet_tests', test_mnet)
@@ -103,7 +127,7 @@ test('mnet_tests', test_mnet)
 test_http = executable('test_http',
     'test/test_http.c',
     link_with: mnet_static,
-    include_directories: [mnet_inc, include_directories('src'), include_directories('test')],
+    include_directories: [mnet_inc, mnet_priv_inc, include_directories('src'), include_directories('test')],
 )
 
 test('mnet_http_tests', test_http)
@@ -111,7 +135,7 @@ test('mnet_http_tests', test_http)
 test_parser = executable('test_parser',
     'test/test_mnet_parser.c',
     link_with: mnet_static,
-    include_directories: [mnet_inc, include_directories('src'), include_directories('test')],
+    include_directories: [mnet_inc, mnet_priv_inc, include_directories('src'), include_directories('test')],
 )
 
 test('mnet_parser_tests', test_parser)
@@ -119,7 +143,7 @@ test('mnet_parser_tests', test_parser)
 test_stress = executable('test_stress',
     'test/test_stress.c',
     link_with: mnet_static,
-    include_directories: [mnet_inc, include_directories('src'), include_directories('test')],
+    include_directories: [mnet_inc, mnet_priv_inc, include_directories('src'), include_directories('test')],
 )
 
 test('mnet_stress_tests', test_stress)
@@ -127,7 +151,7 @@ test('mnet_stress_tests', test_stress)
 test_features = executable('test_features',
     'test/test_features.c',
     link_with: mnet_static,
-    include_directories: [mnet_inc, include_directories('src'), include_directories('test')],
+    include_directories: [mnet_inc, mnet_priv_inc, include_directories('src'), include_directories('test')],
 )
 
 test('mnet_feature_tests', test_features)
@@ -135,10 +159,50 @@ test('mnet_feature_tests', test_features)
 test_security = executable('test_security',
     'test/test_security.c',
     link_with: mnet_static,
-    include_directories: [mnet_inc, include_directories('src'), include_directories('test')],
+    include_directories: [mnet_inc, mnet_priv_inc, include_directories('src'), include_directories('test')],
 )
 
 test('mnet_security_tests', test_security)
+
+test_starvation = executable('test_starvation',
+    'test/test_starvation.c',
+    link_with: mnet_static,
+    include_directories: [mnet_inc, mnet_priv_inc, include_directories('src'), include_directories('test')],
+)
+
+test('mnet_starvation_tests', test_starvation)
+
+test_reentrancy = executable('test_reentrancy',
+    'test/test_reentrancy.c',
+    link_with: mnet_static,
+    include_directories: [mnet_inc, mnet_priv_inc, include_directories('src'), include_directories('test')],
+)
+
+test('mnet_reentrancy_tests', test_reentrancy)
+
+test_http_edge = executable('test_http_edge',
+    'test/test_http_edge.c',
+    link_with: mnet_static,
+    include_directories: [mnet_inc, mnet_priv_inc, include_directories('src'), include_directories('test')],
+)
+
+test('mnet_http_edge_tests', test_http_edge)
+
+test_client = executable('test_client',
+    'test/test_client.c',
+    link_with: mnet_static,
+    include_directories: [mnet_inc, mnet_priv_inc, include_directories('src'), include_directories('test')],
+)
+
+test('mnet_client_tests', test_client)
+
+test_welcome = executable('test_welcome',
+    'test/test_welcome.c',
+    link_with: mnet_static,
+    include_directories: [mnet_inc, mnet_priv_inc, include_directories('src'), include_directories('test')],
+)
+
+test('mnet_welcome_tests', test_welcome)
 
 # Install headers (libraries are installed by default)
 install_headers('include/mnet/mnet.h', 'include/mnet/mnet_app.h', 'include/mnet/mnet_request.h',
