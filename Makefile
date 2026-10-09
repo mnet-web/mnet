@@ -24,6 +24,16 @@ ifeq ($(shell uname -s),Darwin)
     CFLAGS += -D_DARWIN_C_SOURCE
 endif
 
+# Hardening. -fstack-protector-strong works at any optimization level and on
+# GCC/Clang; -Wl,-z,relro,-z,now is ELF-only, so it stays on Linux.
+# _FORTIFY_SOURCE=2 needs optimization, which this Makefile does not set by
+# default: add it yourself when building optimized, e.g.
+#   make CFLAGS="-O2 -D_FORTIFY_SOURCE=2 ..."
+CFLAGS  += -fstack-protector-strong
+ifeq ($(shell uname -s),Linux)
+    LDFLAGS += -Wl,-z,relro,-z,now
+endif
+
 # The worker pool needs pthreads on POSIX.
 ifeq ($(OS),Windows_NT)
     LDFLAGS += -lws2_32
@@ -38,10 +48,11 @@ SRCS    = src/mnet.c src/mnet_app.c src/mnet_response.c \
 
 TEST_SRCS = test/test_mnet.c test/test_http.c test/test_mnet_parser.c \
             test/test_stress.c test/test_features.c test/test_security.c \
-            test/test_client.c test/test_welcome.c
+            test/test_client.c test/test_welcome.c test/test_starvation.c \
+            test/test_reentrancy.c test/test_http_edge.c
 
 TEST_BINS = test_mnet test_http test_parser test_stress test_features \
-            test_security test_client test_welcome
+            test_security test_client test_welcome test_starvation test_reentrancy test_http_edge
 
 # Default target: build everything
 all: lib libmnet.a libmnet.so examples
@@ -152,6 +163,15 @@ test_client: $(SRCS) test/test_client.c
 
 test_welcome: $(SRCS) test/test_welcome.c
 	$(CC) $(CFLAGS) -Isrc $(SRCS) test/test_welcome.c -o $@ $(LDFLAGS)
+
+test_starvation: $(SRCS) test/test_starvation.c
+	$(CC) $(CFLAGS) -Isrc $(SRCS) test/test_starvation.c -o $@ $(LDFLAGS)
+
+test_reentrancy: $(SRCS) test/test_reentrancy.c
+	$(CC) $(CFLAGS) -Isrc $(SRCS) test/test_reentrancy.c -o $@ $(LDFLAGS)
+
+test_http_edge: $(SRCS) test/test_http_edge.c
+	$(CC) $(CFLAGS) -Isrc $(SRCS) test/test_http_edge.c -o $@ $(LDFLAGS)
 
 # ---- Run the examples (build + run) ----
 # Usage: make run EXAMPLE=example_http_server PORT=8080
